@@ -48,21 +48,21 @@ The backend logic lives in `pawpal_system.py` and follows the design in `diagram
 
 | Class | Type | Responsibility | Implemented methods |
 |-------|------|----------------|---------------------|
-| `Task` | dataclass | One care activity: description, scheduled time, due date, frequency (`once`/`daily`/`weekly`), completion status, and the owning pet's name | `mark_complete()` |
+| `Task` | dataclass | One care activity: description, scheduled time, due date, frequency (`once`/`daily`/`weekly`), completion status, and the owning pet's name | `mark_complete()`, `next_occurrence()` |
 | `Pet` | dataclass | A pet's name, species, and its list of tasks | `add_task()`, `get_task()` |
 | `Owner` | dataclass | The owner's name and all registered pets | `add_pet()`, `get_pet()`, `get_all_tasks()` |
-| `Scheduler` | class | Plans across all pets by reading tasks through `Owner.get_all_tasks()` | `get_schedule()` |
+| `Scheduler` | class | Plans across all pets by reading tasks through `Owner.get_all_tasks()` | `get_schedule()`, `sort_by_time()`, `filter_tasks()`, `detect_conflicts()`, `complete_task()`, `mark_task_complete()` |
 
 Key design points:
 
 - **Multi-pet support:** `Pet.add_task()` stamps each task with `pet_name`, so tasks combined by `Owner.get_all_tasks()` still show which pet they belong to.
 - **Scheduler goes through the Owner:** it never reads a single pet's task list directly.
 - **Unique pet names:** `Owner.add_pet()` raises `ValueError` if a pet with the same name is already registered.
-- **Not yet implemented (Phase 4):** `sort_by_time()`, `filter_tasks()`, `detect_conflicts()`, `mark_task_complete()`, and `Task.next_occurrence()`. Until sorting is added, `get_schedule()` returns tasks grouped by pet in the order they were added.
+- **`get_schedule()` is unsorted:** it returns tasks grouped by pet in the order they were added. Pass the result to `sort_by_time()` for a chronological plan (see [Smarter Scheduling](#-smarter-scheduling)).
 
 ### Running the demo
 
-`main.py` creates an owner with two pets (Buddy the dog and Luna the cat), registers four tasks, marks one complete, and prints today's schedule:
+`main.py` creates an owner with two pets (Buddy the dog and Luna the cat) and adds five tasks out of time order, two of them at the same time. It then prints the tasks unsorted and sorted, shows the conflict warning, completes a daily task (which adds tomorrow's copy), and prints several filtered views:
 
 ```bash
 python main.py
@@ -75,12 +75,45 @@ Paste a sample of your app's CLI or Streamlit output here so a reader can see wh
 Output of `python main.py`:
 
 ```
-Today's Schedule for Jordan (Sunday, October 18, 2026)
---------------------------------------------------
-07:30 AM  Buddy   Morning walk      [Done]
-08:00 AM  Buddy   Breakfast         [Pending]
-12:00 PM  Luna    Flea medication   [Pending]
-06:15 PM  Luna    Play session      [Pending]
+PawPal+ demo for Jordan (Monday, October 19, 2026)
+
+Unsorted (grouped by pet, in the order added)
+------------------------------------------------------------
+Oct 19  08:00 AM  Buddy   Breakfast         daily   [Pending]
+Oct 19  07:30 AM  Buddy   Morning walk      daily   [Pending]
+Oct 19  06:15 PM  Luna    Play session      once    [Pending]
+Oct 19  11:00 AM  Luna    Flea medication   weekly  [Pending]
+Oct 19  08:00 AM  Luna    Breakfast         daily   [Pending]
+
+Sorted by time
+------------------------------------------------------------
+Oct 19  07:30 AM  Buddy   Morning walk      daily   [Pending]
+Oct 19  08:00 AM  Buddy   Breakfast         daily   [Pending]
+Oct 19  08:00 AM  Luna    Breakfast         daily   [Pending]
+Oct 19  11:00 AM  Luna    Flea medication   weekly  [Pending]
+Oct 19  06:15 PM  Luna    Play session      once    [Pending]
+
+Conflicts
+------------------------------------------------------------
+Conflict on Oct 19 at 08:00 AM — Buddy: Breakfast, Luna: Breakfast
+
+Completed Buddy's Morning walk -> next one added for Oct 20
+
+Filter: Buddy only
+------------------------------------------------------------
+Oct 19  07:30 AM  Buddy   Morning walk      daily   [Done]
+Oct 19  08:00 AM  Buddy   Breakfast         daily   [Pending]
+Oct 20  07:30 AM  Buddy   Morning walk      daily   [Pending]
+
+Filter: completed
+------------------------------------------------------------
+Oct 19  07:30 AM  Buddy   Morning walk      daily   [Done]
+
+Filter: Luna, pending
+------------------------------------------------------------
+Oct 19  08:00 AM  Luna    Breakfast         daily   [Pending]
+Oct 19  11:00 AM  Luna    Flea medication   weekly  [Pending]
+Oct 19  06:15 PM  Luna    Play session      once    [Pending]
 ```
 
 ## 🧪 Testing PawPal+
@@ -98,6 +131,14 @@ Current tests in `tests/test_pawpal.py`:
 - `test_task_completion`: `mark_complete()` changes a task's status from pending to completed.
 - `test_task_addition`: `add_task()` adds the task to the pet's list and sets its `pet_name`.
 
+Scheduling tests:
+
+- **Sorting:** tasks are ordered by date first, then time (an earlier day beats an earlier time); an empty list stays empty.
+- **Filtering:** by pet, by status, by both together, and an unknown pet name returns nothing.
+- **Recurrence:** daily tasks repeat the next day and weekly tasks 7 days later (including across a month boundary); one-time tasks don't repeat; completing a task twice raises `ValueError`.
+- **Conflicts:** same date and time across pets is flagged; the same time on a different day, times one minute apart, and completed tasks are not.
+- **Ambiguous names:** if two pending tasks share a description, `mark_task_complete()` raises until `due_date`/`scheduled_time` picks one; `complete_task()` matches the exact task object, never a look-alike; unknown pets, unknown tasks and tasks not owned by any pet raise `ValueError`.
+
 `pytest.ini` sets `pythonpath = .` so plain `pytest` can import `pawpal_system` from the project root, and `testpaths = tests` points pytest at the `tests/` folder.
 
 Sample test output:
@@ -109,23 +150,29 @@ rootdir: /Users/dikshyant/codepath-ai110/Labs/ai110-module2show-pawpal-starter
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.15.1
-collected 2 items
+collected 20 items
 
-tests/test_pawpal.py ..                                                  [100%]
+tests/test_pawpal.py ....................                                [100%]
 
-============================== 2 passed in 0.01s ===============================
+============================== 20 passed in 0.02s ==============================
 ```
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()` | Orders by due date, then scheduled time, using `sorted()` with a `(due_date, scheduled_time)` key. Times are stored as `datetime.time`, so no "HH:MM" string parsing is needed. |
+| Filtering | `Scheduler.filter_tasks(pet_name, completed)` | Filter by pet, by completion status, or both; leaving a filter out (`None`) means "any". |
+| Conflict handling | `Scheduler.detect_conflicts()` | Flags tasks for the same pet or different pets at the **exact** same date and time. Returns warning strings instead of raising; completed tasks are ignored. |
+| Recurring tasks | `Task.next_occurrence()`, `Scheduler.complete_task()`, `Scheduler.mark_task_complete()` | Completing a `daily` task adds a new one for the next day (`+ timedelta(days=1)`); `weekly` adds one 7 days later. `once` tasks don't repeat. |
+
+How it works:
+
+- **Sorting:** `get_schedule()` keeps tasks grouped by pet, and `sort_by_time()` turns that into one timeline. Ties keep their existing order because Python's sort is stable.
+- **Filtering:** works across every pet via `Owner.get_all_tasks()`; an unknown pet name returns an empty list rather than an error.
+- **Conflict detection:** a lightweight check that groups tasks by `(due_date, scheduled_time)` in one pass and reports any group with two or more tasks. It doesn't look at durations, so 8:00 and 8:15 never clash (see `reflection.md`, section 2b).
+- **Recurrence:** `complete_task(task)` marks that exact task done and adds the next one to the same pet. `mark_task_complete(pet_name, description)` looks the task up by name first; if the name matches more than one pending task (for example today's and tomorrow's walk), it raises `ValueError` until you also pass `due_date` and/or `scheduled_time`.
+- **In the Streamlit app:** the Schedule section shows conflict warnings for all tasks, has Pet and Status filters, lists tasks in sorted order, and its **Complete** button calls `complete_task()` with the exact task, so recurring tasks add their next copy.
 
 ## 📸 Demo Walkthrough
 

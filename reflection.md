@@ -43,6 +43,12 @@ These changes helped me improve the original design before implementing the actu
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+<!-- DRAFT written with AI. Review it and rewrite it in your own words before submitting. -->
+
+`Scheduler.detect_conflicts()` only flags tasks that are at the *exact* same date and time. It doesn't check for overlapping durations. A 30-minute walk at 8:00 and breakfast at 8:15 really do overlap, but they won't be flagged, because `Task` has no duration field.
+
+This is reasonable for PawPal+ because most pet care tasks are short and are planned at set times (feeding at 8:00, meds at 11:00). An exact-match check catches the most common mistake, booking two things at the same moment, and stays simple. It groups tasks by `(due_date, scheduled_time)` in a single pass, returns plain warning messages instead of crashing, and is easy to test. Checking for overlaps would mean adding a `duration` to every task and comparing time ranges, which adds work for the user and more edge cases (for example, tasks that run past midnight) for little benefit at this stage.
+
 ---
 
 ## 3. AI Collaboration

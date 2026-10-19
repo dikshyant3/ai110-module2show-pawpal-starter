@@ -5,8 +5,22 @@ from datetime import date, time
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 
+def print_tasks(title: str, tasks: list[Task]) -> None:
+    """Print a heading followed by one line per task."""
+    print(f"\n{title}")
+    print("-" * 60)
+    if not tasks:
+        print("(no tasks)")
+    for task in tasks:
+        status = "Done" if task.completed else "Pending"
+        print(
+            f"{task.due_date:%b %d}  {task.scheduled_time:%I:%M %p}  {task.pet_name:<6}  "
+            f"{task.description:<16}  {task.frequency:<6}  [{status}]"
+        )
+
+
 def main() -> None:
-    """Build a sample owner with two pets and print today's schedule."""
+    """Build a sample owner with two pets and demo sorting, filtering, conflicts, and recurrence."""
     today = date.today()
 
     owner = Owner("Jordan")
@@ -15,20 +29,35 @@ def main() -> None:
     owner.add_pet(buddy)
     owner.add_pet(luna)
 
-    buddy.add_task(Task("Morning walk", time(7, 30), today, "daily"))
-    buddy.add_task(Task("Breakfast", time(8, 0), today, "daily"))
-    luna.add_task(Task("Flea medication", time(12, 0), today, "weekly"))
+    # Added out of order on purpose so sort_by_time() has something to do.
     luna.add_task(Task("Play session", time(18, 15), today))
-
-    buddy.tasks[0].mark_complete()
+    buddy.add_task(Task("Breakfast", time(8, 0), today, "daily"))
+    luna.add_task(Task("Flea medication", time(11, 0), today, "weekly"))
+    buddy.add_task(Task("Morning walk", time(7, 30), today, "daily"))
+    # Same date and time as Buddy's breakfast, to trigger a conflict warning.
+    luna.add_task(Task("Breakfast", time(8, 0), today, "daily"))
 
     scheduler = Scheduler(owner)
 
-    print(f"Today's Schedule for {owner.name} ({today:%A, %B %d, %Y})")
-    print("-" * 50)
-    for task in scheduler.get_schedule(today):
-        status = "Done" if task.completed else "Pending"
-        print(f"{task.scheduled_time:%I:%M %p}  {task.pet_name:<6}  {task.description:<16}  [{status}]")
+    print(f"PawPal+ demo for {owner.name} ({today:%A, %B %d, %Y})")
+
+    print_tasks("Unsorted (grouped by pet, in the order added)", scheduler.get_schedule(today))
+    print_tasks("Sorted by time", scheduler.sort_by_time(scheduler.get_schedule(today)))
+
+    print("\nConflicts")
+    print("-" * 60)
+    for warning in scheduler.detect_conflicts(scheduler.get_schedule(today)) or ["None"]:
+        print(warning)
+
+    # Completing a daily task adds tomorrow's copy automatically.
+    next_walk = scheduler.mark_task_complete("Buddy", "Morning walk")
+    print(f"\nCompleted Buddy's Morning walk -> next one added for {next_walk.due_date:%b %d}")
+
+    print_tasks("Filter: Buddy only", scheduler.sort_by_time(scheduler.filter_tasks(pet_name="Buddy")))
+    print_tasks("Filter: completed", scheduler.filter_tasks(completed=True))
+    print_tasks(
+        "Filter: Luna, pending", scheduler.sort_by_time(scheduler.filter_tasks("Luna", False))
+    )
 
 
 if __name__ == "__main__":
