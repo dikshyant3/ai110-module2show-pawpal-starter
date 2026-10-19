@@ -1,0 +1,42 @@
+classDiagram
+    %% PawPal+ draft UML design
+
+    class Owner {
+        +str name
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +get_pet(name: str) Pet
+        +get_all_tasks() list~Task~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +get_task(description: str) Task
+    }
+
+    class Task {
+        +str description
+        +time scheduled_time
+        +date due_date
+        +str frequency
+        +bool completed
+        +mark_complete() None
+        +next_occurrence() Optional~Task~
+    }
+
+    class Scheduler {
+        +Owner owner
+        +get_schedule(day: date) list~Task~
+        +sort_by_time(tasks: list~Task~) list~Task~
+        +filter_tasks(pet_name: str, completed: bool) list~Task~
+        +detect_conflicts(tasks: list~Task~) list~str~
+        +mark_task_complete(pet_name: str, description: str) None
+    }
+
+    Owner "1" o-- "0..*" Pet : manages
+    Pet "1" *-- "0..*" Task : has
+    Scheduler "1" --> "1" Owner : reads tasks via get_all_tasks()
+    Scheduler ..> Task : sorts / filters

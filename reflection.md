@@ -5,7 +5,13 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+My initial UML design is creating a simple pet care management system where an owner could manage multiple pets and their daily activities. 
+
+
 - What classes did you include, and what responsibilities did you assign to each?
+
+I used four main classes: Owner, Pets, Tasks, and Scheduler. The Owner class manages the pets registered in the system. The Pet class consists the pet information such as name, and species and the tasks they need to perform. The Task class represents activities such as feeding, walking, medication, and appointments. Finally, the Scheduler class organizes all the tasks, sort them by time, and helps the owner manage daily activities.
+
 
 **b. Design changes**
 
