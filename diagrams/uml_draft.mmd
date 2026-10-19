@@ -5,7 +5,7 @@ classDiagram
         +str name
         +list~Pet~ pets
         +add_pet(pet: Pet) None
-        +get_pet(name: str) Pet
+        +get_pet(name: str) Optional~Pet~
         +get_all_tasks() list~Task~
     }
 
@@ -14,7 +14,7 @@ classDiagram
         +str species
         +list~Task~ tasks
         +add_task(task: Task) None
-        +get_task(description: str) Task
+        +get_task(description: str) Optional~Task~
     }
 
     class Task {
@@ -23,6 +23,7 @@ classDiagram
         +date due_date
         +str frequency
         +bool completed
+        +str pet_name
         +mark_complete() None
         +next_occurrence() Optional~Task~
     }
