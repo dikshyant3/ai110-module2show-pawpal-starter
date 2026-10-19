@@ -4,43 +4,16 @@ from pawpal_system import Owner, Pet, Scheduler, Task
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 st.title("🐾 PawPal+")
-
-st.markdown(
-    """
-Welcome to the PawPal+ starter app.
-
-This file is intentionally thin. It gives you a working Streamlit app so you can start quickly,
-but **it does not implement the project logic**. Your job is to design the system and build it.
-
-Use this app as your interactive demo once your backend classes/functions exist.
-"""
-)
-
-with st.expander("Scenario", expanded=True):
-    st.markdown(
-        """
-**PawPal+** is a pet care planning assistant. It helps a pet owner plan care tasks
-for their pet(s) based on constraints like time, priority, and preferences.
-
-You will design and implement the scheduling logic and connect it to this Streamlit UI.
-"""
-    )
-
-with st.expander("What you need to build", expanded=True):
-    st.markdown(
-        """
-At minimum, your system should:
-- Represent pet care tasks (what needs to happen, how long it takes, priority)
-- Represent the pet and the owner (basic info and preferences)
-- Build a plan/schedule for a day that chooses and orders tasks based on constraints
-- Explain the plan (why each task was chosen and when it happens)
-"""
-    )
+st.caption("Plan and track the care routines that keep your pets happy and healthy.")
 
 st.divider()
 
-st.subheader("Owner")
-owner_name = st.text_input("Owner name", value="Jordan")
+st.subheader("Your household")
+owner_name = st.text_input(
+    "Owner name",
+    value="Jordan",
+    help="Used when your PawPal+ session starts.",
+)
 
 # Create the Owner only once; Streamlit reruns this script on every interaction.
 if "owner" not in st.session_state:
@@ -49,10 +22,11 @@ owner = st.session_state.owner
 
 st.divider()
 
-st.subheader("Add a Pet")
+st.subheader("Pets")
+st.caption("Add each pet once, then assign care tasks to them.")
 with st.form("add_pet_form", clear_on_submit=True):
-    pet_name = st.text_input("Pet name")
-    species = st.selectbox("Species", ["dog", "cat", "other"])
+    pet_name = st.text_input("Pet name", help="Use a distinct name for each pet.")
+    species = st.selectbox("Pet species", ["dog", "cat", "other"])
     add_pet_clicked = st.form_submit_button("Add pet")
 
 if add_pet_clicked:
@@ -66,27 +40,39 @@ if add_pet_clicked:
             st.error(str(error))
 
 if owner.pets:
-    st.write("Your pets:")
-    st.table([{"Name": pet.name, "Species": pet.species} for pet in owner.pets])
+    st.caption(f"{len(owner.pets)} pet{'s' if len(owner.pets) != 1 else ''} in your household")
+    st.dataframe(
+        [{"Pet": pet.name, "Species": pet.species.title()} for pet in owner.pets],
+        hide_index=True,
+        use_container_width=True,
+    )
 else:
-    st.info("No pets yet. Add one above.")
+    st.info("No pets added yet. Add your first pet above to get started.")
 
 st.divider()
 
-st.subheader("Add a Task")
+st.subheader("Care tasks")
+st.caption("Schedule a one-time activity or set a daily or weekly routine.")
 if not owner.pets:
-    st.info("Add a pet first, then you can assign tasks to it.")
+    st.info("Add a pet before creating care tasks.")
 else:
     with st.form("add_task_form", clear_on_submit=True):
-        task_pet_name = st.selectbox("Pet", [pet.name for pet in owner.pets])
-        description = st.text_input("Task description")
+        task_pet_name = st.selectbox("Assign to pet", [pet.name for pet in owner.pets])
+        description = st.text_input(
+            "What needs to be done?",
+            help="For example: breakfast, evening walk, or medication.",
+        )
         col1, col2, col3 = st.columns(3)
         with col1:
-            scheduled_time = st.time_input("Time")
+            scheduled_time = st.time_input("Scheduled time")
         with col2:
             due_date = st.date_input("Due date")
         with col3:
-            frequency = st.selectbox("Frequency", ["once", "daily", "weekly"])
+            frequency = st.selectbox(
+                "Repeat",
+                ["once", "daily", "weekly"],
+                help="Recurring tasks create the next occurrence when completed.",
+            )
         add_task_clicked = st.form_submit_button("Add task")
 
     if add_task_clicked:
@@ -99,8 +85,10 @@ else:
 
 st.divider()
 
-st.subheader("Schedule")
-st.caption("Sorted by date and time. Completing a daily/weekly task adds its next occurrence.")
+st.subheader("Care schedule")
+st.caption(
+    "Tasks are ordered by date and time. Completing a recurring task adds its next occurrence."
+)
 
 scheduler = Scheduler(owner)
 
@@ -112,10 +100,16 @@ for warning in scheduler.detect_conflicts(scheduler.get_schedule()):
 filter_col1, filter_col2 = st.columns(2)
 with filter_col1:
     pet_filter = st.selectbox(
-        "Pet", ["All pets"] + [pet.name for pet in owner.pets], key="filter_pet"
+        "Filter by pet",
+        ["All pets"] + [pet.name for pet in owner.pets],
+        key="filter_pet",
     )
 with filter_col2:
-    status_filter = st.selectbox("Status", ["All", "Pending", "Done"], key="filter_status")
+    status_filter = st.selectbox(
+        "Filter by status",
+        ["All", "Pending", "Done"],
+        key="filter_status",
+    )
 
 schedule = scheduler.sort_by_time(
     scheduler.filter_tasks(
@@ -125,25 +119,31 @@ schedule = scheduler.sort_by_time(
 )
 
 if not schedule:
-    st.info("No tasks match. Add a task above or change the filters.")
+    if not owner.get_all_tasks():
+        st.info("No care tasks yet. Add a task above to build your schedule.")
+    else:
+        st.info("No tasks match these filters. Try a different pet or status.")
 else:
     for task in schedule:
-        col_info, col_status = st.columns([4, 1])
-        with col_info:
-            st.write(
-                f"**{task.scheduled_time:%I:%M %p}** · {task.due_date:%b %d} · "
-                f"{task.pet_name} · {task.description} ({task.frequency})"
-            )
-        with col_status:
-            if task.completed:
-                st.write("✅ Done")
-            else:
-                # Pass the task object itself so tasks sharing a description can't be confused;
-                # id() is stable because the tasks live in session_state. on_click runs before
-                # the rerun, so the new status (and any next occurrence) shows immediately.
-                st.button(
-                    "Complete",
-                    key=f"complete_{id(task)}",
-                    on_click=scheduler.complete_task,
-                    args=(task,),
+        with st.container(border=True):
+            col_info, col_status = st.columns([4, 1])
+            with col_info:
+                st.markdown(f"**{task.description}**")
+                st.caption(
+                    f"{task.pet_name} · {task.due_date:%A, %b %d} at "
+                    f"{task.scheduled_time:%I:%M %p} · "
+                    f"{task.frequency.title()} routine"
                 )
+            with col_status:
+                if task.completed:
+                    st.success("Done")
+                else:
+                    # Pass the task object itself so equal descriptions cannot complete the
+                    # wrong task. The object remains in session state across reruns.
+                    st.button(
+                        "Complete",
+                        key=f"complete_{id(task)}",
+                        on_click=scheduler.complete_task,
+                        args=(task,),
+                        help="Mark this task complete.",
+                    )

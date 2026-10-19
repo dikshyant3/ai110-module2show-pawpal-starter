@@ -77,13 +77,19 @@ I checked that the code matched my UML and that every change came with an explan
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I expanded `tests/test_pawpal.py` to check five groups of behavior:
+
+- **Task and ownership behavior:** completion state, task recurrence rules, automatic pet-name tagging, pet task lookup, duplicate pet rejection, and collecting an owner's tasks. These checks protect the links between model objects so tasks stay associated with the right pet.
+- **Schedule algorithms:** retrieving every task or only one day's tasks, chronological sorting by date and then time, stable ordering for equal slots, and filtering by pet and completion state. These tests verify normal scheduling as well as empty and unknown-filter cases.
+- **Conflict detection:** exact date-and-time collisions, multiple conflict groups, same-pet and cross-pet clashes, and non-clashes for different dates, a one-minute difference, or completed tasks. These checks pin down the scheduler's exact-time rule.
+- **Recurring completion and errors:** daily and weekly next dates, a year rollover, no recurrence for a one-time task, preserving time/pet and resetting completion on the next occurrence, duplicate descriptions resolved by date or time, and errors for repeat completion, missing pets/tasks, and foreign task objects. These are important because a wrong match or recurrence could silently change the wrong task or assign work to the wrong pet.
+- **Streamlit flow:** an AppTest starts the app, confirms the empty-pet state, adds a pet and a daily task, then completes it and checks that the next occurrence is displayed. This provides a basic integration check that the UI is wired to the backend methods.
+
+I ran `python -m pytest`: **29 passed in 0.71s**. I also ran `python -m compileall -q pawpal_system.py app.py main.py tests`; it completed successfully with no syntax errors. No genuine backend bug was exposed by the expanded tests. During test development I corrected assumptions about task ownership and Streamlit's AppTest widget/path API; those were test setup issues, not application fixes.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I rate the scheduler **4 out of 5 stars** based on the current evidence. The tests cover central sorting, filtering, conflict, recurrence, lookup, and task completion behaviors, including boundary/error cases, and the representative Streamlit workflow passes. Next, I would test interactive filter combinations and duplicate-pet/error messages through the Streamlit interface, then run it in a browser to cover behavior beyond in-process AppTest.
 
 ---
 
@@ -91,12 +97,12 @@ I checked that the code matched my UML and that every change came with an explan
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+I am most satisfied that the tests now exercise both the scheduler's backend rules and a user-facing Streamlit workflow without changing the four-class architecture. The schedule tests verify more than the happy path: they clarify tie ordering, what counts as a conflict, and recurring completion behavior. The UI test also checks that completing a daily item surfaces tomorrow's task.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+If I had another iteration, I would add broader UI interaction tests for changing pet/status filters, duplicate-pet submission, and blank inputs. I would also consider whether task descriptions need a more explicit unique identifier in a future version; today, the scheduler handles duplicate descriptions by requiring a date and/or time, which is tested but still asks the caller to disambiguate.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+My key takeaway is that tests should describe the actual model contract instead of the test writer's assumptions. For example, adding a task to a pet deliberately sets its `pet_name`, so a valid foreign-task test must use a task from a separate owner rather than trying to preserve a mismatched pet name. I also learned to verify both the backend and its UI integration, and to record only results that were actually run.

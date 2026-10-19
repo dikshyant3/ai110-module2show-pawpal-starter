@@ -119,43 +119,43 @@ Oct 19  06:15 PM  Luna    Play session      once    [Pending]
 ## 🧪 Testing PawPal+
 
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage (requires: pip install pytest-cov):
-pytest --cov
+python -m pytest
 ```
 
-Current tests in `tests/test_pawpal.py`:
+The 29 tests in `tests/test_pawpal.py` cover:
 
-- `test_task_completion`: `mark_complete()` changes a task's status from pending to completed.
-- `test_task_addition`: `add_task()` adds the task to the pet's list and sets its `pet_name`.
+- Task completion and recurrence: daily, weekly, and one-time behavior; date rollovers; the next task's due date, time, pet, and pending status.
+- Owner and pet behavior: constructor/addition task ownership, task lookup, unknown lookups, duplicate pet names, and collecting tasks.
+- Scheduling: all-task and date-specific schedules; chronological ordering by date then time, stable ties, empty inputs, and filters by pet and completion status.
+- Conflicts: exact matching date/time, multiple conflict slots, conflicts on one pet or across pets, and non-conflicts for different days, one-minute offsets, or completed tasks.
+- Completion edge cases: duplicate descriptions and disambiguation by date/time, duplicate completion, identity vs. value-equal tasks, missing pets/tasks, and foreign task objects.
+- Streamlit smoke flow: initial empty-pet state, adding a pet and daily task, and completing the task to verify the next occurrence appears.
 
-Scheduling tests:
+`pytest.ini` sets `pythonpath = .` and `testpaths = tests`. Python syntax was also checked for the backend, Streamlit app, demo, and tests with:
 
-- **Sorting:** tasks are ordered by date first, then time (an earlier day beats an earlier time); an empty list stays empty.
-- **Filtering:** by pet, by status, by both together, and an unknown pet name returns nothing.
-- **Recurrence:** daily tasks repeat the next day and weekly tasks 7 days later (including across a month boundary); one-time tasks don't repeat; completing a task twice raises `ValueError`.
-- **Conflicts:** same date and time across pets is flagged; the same time on a different day, times one minute apart, and completed tasks are not.
-- **Ambiguous names:** if two pending tasks share a description, `mark_task_complete()` raises until `due_date`/`scheduled_time` picks one; `complete_task()` matches the exact task object, never a look-alike; unknown pets, unknown tasks and tasks not owned by any pet raise `ValueError`.
+```bash
+python -m compileall -q pawpal_system.py app.py main.py tests
+```
 
-`pytest.ini` sets `pythonpath = .` so plain `pytest` can import `pawpal_system` from the project root, and `testpaths = tests` points pytest at the `tests/` folder.
-
-Sample test output:
+Actual test output:
 
 ```
 ============================= test session starts ==============================
+(.venv) dikshyant@Mac ai110-module2show-pawpal-starter % python -m pytest
+============================== test session starts ===============================
 platform darwin -- Python 3.13.13, pytest-9.1.1, pluggy-1.7.0
 rootdir: /Users/dikshyant/codepath-ai110/Labs/ai110-module2show-pawpal-starter
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.15.1
-collected 20 items
+collected 29 items                                                               
 
-tests/test_pawpal.py ....................                                [100%]
+tests/test_pawpal.py .............................                         [100%]
 
-============================== 20 passed in 0.02s ==============================
+=============================== 29 passed in 0.74s ===============================
 ```
+
+Syntax check result: passed (the command completed successfully and produced no errors). Confidence level: **4/5 stars** based on this test and syntax-check coverage; the tests exercise core backend behavior and a representative UI flow, but are not an exhaustive test of every Streamlit interaction or real browser session.
 
 ## 📐 Smarter Scheduling
 
