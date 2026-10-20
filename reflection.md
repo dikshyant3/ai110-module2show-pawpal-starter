@@ -27,6 +27,8 @@ I also changed the sorting design to consider both the scheduled date and time i
 
 These changes helped me improve the original design before implementing the actual functionality. They also made the system better prepared for multi-pet scheduling, recurring tasks, and filtering.
 
+The final UML is saved as [`diagrams/uml_final.mmd`](diagrams/uml_final.mmd). It reflects the implemented class attributes and methods, the Owner-to-Pet and Pet-to-Task relationships, and the Scheduler's dependency on Owner for task retrieval and on Task objects for sorting, filtering, conflict checks, and completion.
+
 
 
 ---
@@ -61,15 +63,19 @@ I used Claude Code in VS Code at each stage of the project. First it turned my c
 
 The most helpful prompts were specific and set clear limits. Examples were "use the actual method signatures from my code," "do not implement Phase 4 algorithms yet," "do not modify app.py," and "explain any necessary design changes before making them." Asking for a review of "class responsibilities, UML consistency, relationships, and multi-pet scheduling support" also worked well, because it pointed the AI at real design problems instead of general advice.
 
+In the later implementation work, codebase inspection, targeted edits, and running pytest/AppTest were the most useful assistant capabilities. They helped connect the UI to the existing Scheduler methods and verify that its conflict warnings, filters, and recurring-task completion still worked. For example, the assistant's initial suggestions for a richer task model included duration and priority fields; I kept the design focused on the fields and exact-time behavior already implemented instead of expanding the architecture.
+
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 
 When I first described my four classes, the AI began writing a UML diagram based on its own assumptions. It added attributes I hadn't asked for, such as available_minutes, preferences, and priority. I rejected that change and wrote a more detailed prompt that listed the exact attributes and methods for each class. I also required that the Scheduler access tasks through Owner.get_all_tasks(), and that the design stay simple and beginner-level. Later, during Phase 2, I stopped the AI partway through and gave it a shorter, more focused version of the instructions.
 
+I did not use a separate chat session for every phase of this latest implementation, so I cannot claim separate chats directly helped this work. I kept the requests phase-specific instead: first expanding and verifying tests, then improving the interface, then aligning the UML and documentation. When I do split work into separate chats, keeping each one focused on a phase helps by reducing unrelated context and making it easier to return to the relevant files and decisions.
+
 - How did you evaluate or verify what the AI suggested?
 
-I checked that the code matched my UML and that every change came with an explanation. The AI also ran the code after each step instead of just saying it worked. It checked the syntax, ran main.py to confirm that tasks from both Buddy and Luna appeared with the correct pet names, and ran the pytest tests. While testing, it found that plain `pytest` failed with a ModuleNotFoundError even though `python -m pytest` passed, and it fixed this by adding a pytest.ini file with `pythonpath = .` so pytest can import from the project root. It also pointed out limits instead of hiding them, such as get_schedule() not sorting tasks yet and `pytest --cov` needing the pytest-cov plugin.
+I checked that the code matched my UML and that every change came with an explanation. The AI also ran the code after each step instead of just saying it worked. It checked the syntax, ran main.py to confirm that tasks from both Buddy and Luna appeared with the correct pet names, and ran the pytest tests. While testing, it found that plain `pytest` failed with a ModuleNotFoundError even though `python -m pytest` passed, and it fixed this by adding a pytest.ini file so pytest can import from the project root. It also pointed out limits instead of hiding them, such as get_schedule() not sorting tasks yet and `pytest --cov` needing the pytest-cov plugin.
 
 ---
 
@@ -85,7 +91,7 @@ I expanded `tests/test_pawpal.py` to check five groups of behavior:
 - **Recurring completion and errors:** daily and weekly next dates, a year rollover, no recurrence for a one-time task, preserving time/pet and resetting completion on the next occurrence, duplicate descriptions resolved by date or time, and errors for repeat completion, missing pets/tasks, and foreign task objects. These are important because a wrong match or recurrence could silently change the wrong task or assign work to the wrong pet.
 - **Streamlit flow:** an AppTest starts the app, confirms the empty-pet state, adds a pet and a daily task, then completes it and checks that the next occurrence is displayed. This provides a basic integration check that the UI is wired to the backend methods.
 
-I ran `python -m pytest`: **29 passed in 0.71s**. I also ran `python -m compileall -q pawpal_system.py app.py main.py tests`; it completed successfully with no syntax errors. No genuine backend bug was exposed by the expanded tests. During test development I corrected assumptions about task ownership and Streamlit's AppTest widget/path API; those were test setup issues, not application fixes.
+I ran `python -m pytest`: **31 passed in 0.63s**. The Streamlit checks cover the empty state, adding and completing a recurring task, feedback for blank/duplicate submissions, and a conflict warning that remains visible when the current pet filter hides one of the clashing tasks. No genuine backend bug was exposed. During test development I corrected assumptions about task ownership and Streamlit's AppTest widget/path API; those were test setup issues, not application fixes.
 
 **b. Confidence**
 
@@ -101,8 +107,8 @@ I am most satisfied that the tests now exercise both the scheduler's backend rul
 
 **b. What you would improve**
 
-If I had another iteration, I would add broader UI interaction tests for changing pet/status filters, duplicate-pet submission, and blank inputs. I would also consider whether task descriptions need a more explicit unique identifier in a future version; today, the scheduler handles duplicate descriptions by requiring a date and/or time, which is tested but still asks the caller to disambiguate.
+If I had another iteration, I would add broader UI interaction tests for changing pet/status filters, duplicate-pet submission, and blank inputs. I would also consider whether task descriptions need a more explicit unique identifier in a future version; here, the scheduler handles duplicate descriptions by requiring a date and/or time, which is tested but still asks the caller to disambiguate.
 
 **c. Key takeaway**
 
-My key takeaway is that tests should describe the actual model contract instead of the test writer's assumptions. For example, adding a task to a pet deliberately sets its `pet_name`, so a valid foreign-task test must use a task from a separate owner rather than trying to preserve a mismatched pet name. I also learned to verify both the backend and its UI integration, and to record only results that were actually run.
+My key takeaway is that the AI can generate and refine code quickly, but I remain responsible for the architecture and evidence. Being the lead architect means keeping the model aligned with the real requirements, rejecting extra complexity when it is not needed, checking that the UI uses the intended backend methods, and validating claims with tests and actual program output. I also learned that tests should describe the actual model contract: adding a task to a pet deliberately sets its `pet_name`, so a valid foreign-task test must use a task from a separate owner rather than expecting a mismatched name to remain.

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from collections import defaultdict
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 
 RECURRENCE_INTERVALS = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1)}
+PRIORITY_RANKS = {"High": 0, "Medium": 1, "Low": 2}
 
 
 @dataclass
@@ -21,6 +25,20 @@ class Task:
     frequency: str = "once"  # "once", "daily", or "weekly"
     completed: bool = False
     pet_name: str = ""  # set by Pet.add_task so the Scheduler knows whose task it is
+    task_id: str = field(default_factory=lambda: str(uuid4()), compare=False)
+    duration_minutes: int = 30
+    priority: str = "Medium"
+
+    def __post_init__(self) -> None:
+        """Validate the task's duration and priority."""
+        if (
+            isinstance(self.duration_minutes, bool)
+            or not isinstance(self.duration_minutes, int)
+            or self.duration_minutes <= 0
+        ):
+            raise ValueError("Task duration must be a positive whole number of minutes.")
+        if not isinstance(self.priority, str) or self.priority not in PRIORITY_RANKS:
+            raise ValueError("Task priority must be Low, Medium, or High.")
 
     def mark_complete(self) -> None:
         """Mark this task as completed."""
@@ -36,6 +54,8 @@ class Task:
             self.due_date + RECURRENCE_INTERVALS[self.frequency],
             self.frequency,
             pet_name=self.pet_name,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
         )
 
 
@@ -111,6 +131,137 @@ class Owner:
             all_tasks.extend(pet.tasks)
         return all_tasks
 
+    def to_dict(self) -> dict[str, object]:
+        """Return this household as JSON-compatible data."""
+        return {
+            "version": 1,
+            "owner": {
+                "name": self.name,
+                "pets": [
+                    {
+                        "name": pet.name,
+                        "species": pet.species,
+                        "tasks": [
+                            {
+                                "id": task.task_id,
+                                "description": task.description,
+                                "scheduled_time": task.scheduled_time.isoformat(),
+                                "due_date": task.due_date.isoformat(),
+                                "frequency": task.frequency,
+                                "completed": task.completed,
+                                "duration_minutes": task.duration_minutes,
+                                "priority": task.priority,
+                            }
+                            for task in pet.tasks
+                        ],
+                    }
+                    for pet in self.pets
+                ],
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> Owner:
+        """Create a household from the versioned JSON-compatible representation."""
+        if not isinstance(data, dict) or data.get("version") != 1:
+            raise ValueError("Unsupported or invalid PawPal+ JSON data.")
+
+        owner_data = data.get("owner")
+        if (
+            not isinstance(owner_data, dict)
+            or not isinstance(owner_data.get("name"), str)
+            or not isinstance(owner_data.get("pets"), list)
+        ):
+            raise ValueError("PawPal+ JSON must contain an owner name and pets list.")
+
+        owner = cls(owner_data["name"])
+        task_ids: set[str] = set()
+        for pet_data in owner_data["pets"]:
+            if (
+                not isinstance(pet_data, dict)
+                or not isinstance(pet_data.get("name"), str)
+                or not isinstance(pet_data.get("species"), str)
+                or not isinstance(pet_data.get("tasks"), list)
+            ):
+                raise ValueError("Each pet must contain a name, species, and tasks list.")
+
+            pet = Pet(pet_data["name"], pet_data["species"])
+            for task_data in pet_data["tasks"]:
+                if (
+                    not isinstance(task_data, dict)
+                    or not isinstance(task_data.get("id"), str)
+                    or not isinstance(task_data.get("description"), str)
+                    or not isinstance(task_data.get("scheduled_time"), str)
+                    or not isinstance(task_data.get("due_date"), str)
+                    or not isinstance(task_data.get("frequency"), str)
+                    or not isinstance(task_data.get("completed"), bool)
+                    or (
+                        "priority" in task_data
+                        and (
+                            not isinstance(task_data["priority"], str)
+                            or task_data["priority"] not in PRIORITY_RANKS
+                        )
+                    )
+                    or (
+                        "duration_minutes" in task_data
+                        and (
+                            isinstance(task_data["duration_minutes"], bool)
+                            or not isinstance(task_data["duration_minutes"], int)
+                            or task_data["duration_minutes"] <= 0
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "Each task must contain its id, description, time, date, "
+                        "frequency, and completion status, with an optional positive "
+                        "whole-minute duration."
+                    )
+                if task_data["id"] in task_ids:
+                    raise ValueError(f"Duplicate task ID {task_data['id']!r}.")
+                task_ids.add(task_data["id"])
+
+                pet.add_task(
+                    Task(
+                        task_data["description"],
+                        time.fromisoformat(task_data["scheduled_time"]),
+                        date.fromisoformat(task_data["due_date"]),
+                        task_data["frequency"],
+                        completed=task_data["completed"],
+                        task_id=task_data["id"],
+                        duration_minutes=task_data.get("duration_minutes", 30),
+                        priority=task_data.get("priority", "Medium"),
+                    )
+                )
+            owner.add_pet(pet)
+        return owner
+
+    def to_json(self) -> str:
+        """Serialize this household to formatted JSON text."""
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_json(cls, json_data: str | bytes) -> Owner:
+        """Create a household from JSON text or bytes."""
+        return cls.from_dict(json.loads(json_data))
+
+    def save_to_json(self, path: str | Path = "data.json") -> None:
+        """Write this household to a UTF-8 JSON file (data.json by default)."""
+        Path(path).write_text(self.to_json() + "\n", encoding="utf-8")
+
+    @classmethod
+    def load_from_json(cls, path: str | Path = "data.json") -> Owner:
+        """Load a household from a UTF-8 JSON file (data.json by default)."""
+        return cls.from_json(Path(path).read_text(encoding="utf-8"))
+
+    def save_json(self, path: str | Path = "data.json") -> None:
+        """Backward-compatible alias for save_to_json()."""
+        self.save_to_json(path)
+
+    @classmethod
+    def load_json(cls, path: str | Path = "data.json") -> Owner:
+        """Backward-compatible alias for load_from_json()."""
+        return cls.load_from_json(path)
+
 
 class Scheduler:
     """Organizes tasks across all pets, accessed through the Owner."""
@@ -126,8 +277,46 @@ class Scheduler:
         return [task for task in tasks if task.due_date == day]
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Return the tasks ordered by due date, then scheduled time."""
-        return sorted(tasks, key=lambda task: (task.due_date, task.scheduled_time))
+        """Return tasks ordered by priority, then due date and scheduled time."""
+        return sorted(
+            tasks,
+            key=lambda task: (
+                PRIORITY_RANKS[task.priority],
+                task.due_date,
+                task.scheduled_time,
+            ),
+        )
+
+    def find_next_available_slot(
+        self, start: datetime, duration: timedelta
+    ) -> datetime:
+        """Return the earliest slot of ``duration`` not overlapping a pending task.
+
+        Existing task intervals use each task's due date, scheduled time, and duration.
+        The search considers tasks across every pet and can continue into later days.
+        """
+        if start.tzinfo is not None and start.utcoffset() is not None:
+            raise ValueError("Start time must not include a timezone.")
+        if duration <= timedelta(0):
+            raise ValueError("Requested duration must be positive.")
+
+        candidate = start
+        pending_tasks = [task for task in self.owner.get_all_tasks() if not task.completed]
+        busy_intervals: list[tuple[datetime, datetime]] = []
+        for task in pending_tasks:
+            busy_start = datetime.combine(task.due_date, task.scheduled_time)
+            busy_end = busy_start + timedelta(minutes=task.duration_minutes)
+            busy_intervals.append((busy_start, busy_end))
+        while True:
+            candidate_end = candidate + duration
+            overlapping_ends = [
+                busy_end
+                for busy_start, busy_end in busy_intervals
+                if candidate < busy_end and busy_start < candidate_end
+            ]
+            if not overlapping_ends:
+                return candidate
+            candidate = max(overlapping_ends)
 
     def filter_tasks(
         self, pet_name: Optional[str] = None, completed: Optional[bool] = None

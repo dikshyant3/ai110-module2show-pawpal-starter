@@ -1,22 +1,16 @@
 """Demo script for the PawPal+ backend."""
 
+import sys
 from datetime import date, time
 
+from output_formatting import format_task_table
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 
 def print_tasks(title: str, tasks: list[Task]) -> None:
-    """Print a heading followed by one line per task."""
+    """Print a heading followed by a formatted task table."""
     print(f"\n{title}")
-    print("-" * 60)
-    if not tasks:
-        print("(no tasks)")
-    for task in tasks:
-        status = "Done" if task.completed else "Pending"
-        print(
-            f"{task.due_date:%b %d}  {task.scheduled_time:%I:%M %p}  {task.pet_name:<6}  "
-            f"{task.description:<16}  {task.frequency:<6}  [{status}]"
-        )
+    print(format_task_table(tasks, color=sys.stdout.isatty()))
 
 
 def main() -> None:
@@ -29,11 +23,11 @@ def main() -> None:
     owner.add_pet(buddy)
     owner.add_pet(luna)
 
-    # Added out of order on purpose so sort_by_time() has something to do.
-    luna.add_task(Task("Play session", time(18, 15), today))
+    # Added out of order on purpose so priority sorting has something to do.
+    luna.add_task(Task("Play session", time(6, 15), today, priority="Low"))
     buddy.add_task(Task("Breakfast", time(8, 0), today, "daily"))
-    luna.add_task(Task("Flea medication", time(11, 0), today, "weekly"))
-    buddy.add_task(Task("Morning walk", time(7, 30), today, "daily"))
+    luna.add_task(Task("Flea medication", time(11, 0), today, "weekly", priority="High"))
+    buddy.add_task(Task("Morning walk", time(7, 30), today, "daily", priority="High"))
     # Same date and time as Buddy's breakfast, to trigger a conflict warning.
     luna.add_task(Task("Breakfast", time(8, 0), today, "daily"))
 
@@ -42,7 +36,10 @@ def main() -> None:
     print(f"PawPal+ demo for {owner.name} ({today:%A, %B %d, %Y})")
 
     print_tasks("Unsorted (grouped by pet, in the order added)", scheduler.get_schedule(today))
-    print_tasks("Sorted by time", scheduler.sort_by_time(scheduler.get_schedule(today)))
+    print_tasks(
+        "Sorted by priority, date, and time",
+        scheduler.sort_by_time(scheduler.get_schedule(today)),
+    )
 
     print("\nConflicts")
     print("-" * 60)

@@ -1,0 +1,57 @@
+classDiagram
+    class Owner {
+        +str name
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +get_pet(name: str) Optional~Pet~
+        +get_all_tasks() list~Task~
+        +to_dict() dict
+        +from_dict(data: object) Owner
+        +to_json() str
+        +from_json(json_data: str|bytes) Owner
+        +save_json(path: str|Path) None
+        +load_json(path: str|Path) Owner
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +list~Task~ tasks
+        +__post_init__() None
+        +add_task(task: Task) None
+        +get_task(description: str, due_date: Optional~date~, scheduled_time: Optional~time~) Optional~Task~
+    }
+
+    class Task {
+        +str task_id
+        +str description
+        +time scheduled_time
+        +date due_date
+        +str frequency
+        +bool completed
+        +str pet_name
+        +int duration_minutes
+        +str priority
+        +mark_complete() None
+        +next_occurrence() Optional~Task~
+    }
+
+    class Scheduler {
+        +Owner owner
+        +__init__(owner: Owner) None
+        +get_schedule(day: Optional~date~) list~Task~
+        +sort_by_time(tasks: list~Task~) list~Task~
+        +find_next_available_slot(start: datetime, duration: timedelta) datetime
+        +filter_tasks(pet_name: Optional~str~, completed: Optional~bool~) list~Task~
+        +detect_conflicts(tasks: list~Task~) list~str~
+        +complete_task(task: Task) Optional~Task~
+        +mark_task_complete(pet_name: str, description: str, due_date: Optional~date~, scheduled_time: Optional~time~) Optional~Task~
+    }
+
+    Owner "1" o-- "0..*" Pet : manages
+    Pet "1" *-- "0..*" Task : owns
+    Scheduler "1" --> "1" Owner : reads tasks via get_all_tasks()
+    Scheduler ..> Task : sorts, filters, detects conflicts, completes
+
+    note for Task "pet_name is assigned by Pet; frequency is once, daily, or weekly; duration defaults to 30 positive whole minutes; priority is Low, Medium, or High (default Medium)."
+    note for Scheduler "Tasks sort by priority (High first), then due date and time. Conflicts are pending tasks at the exact same date and time. Slot search avoids pending task intervals."
